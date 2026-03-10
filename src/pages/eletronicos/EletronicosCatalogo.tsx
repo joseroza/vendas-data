@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { toast } from "sonner";
-import { ImportCSV } from "@/components/ImportCSV";
 
 export default function EletronicosCatalogo() {
   const { state, addProdutoEletronico, deleteProdutoEletronicoAction } = useApp();
@@ -40,27 +39,7 @@ export default function EletronicosCatalogo() {
   }
 
 
-  async function handleImportCSV(rows: Record<string, string>[]) {
-    let ok = 0;
-    const errors: string[] = [];
-    for (const [i, row] of rows.entries()) {
-      const linha   = i + 2;
-      const nome    = row["nome"]?.trim();
-      const precoRef = parseFloat(row["preco_referencia"]);
-      if (!nome)                           { errors.push(`Linha ${linha}: nome obrigatório.`); continue; }
-      if (isNaN(precoRef) || precoRef <= 0){ errors.push(`Linha ${linha}: preco_referencia inválido.`); continue; }
-      try {
-        await addProdutoEletronico({ nome, precoReferencia: precoRef });
-        ok++;
-      } catch { errors.push(`Linha ${linha}: erro ao salvar "${nome}".`); }
-    }
-    return { ok, errors };
-  }
 
-  const CSV_COLS_ELET = [
-    { key: "nome",             label: "Nome do Produto",   required: true,  example: "iPhone 15 Pro" },
-    { key: "preco_referencia", label: "Preço de Referência (R$)", required: true, example: "4500.00", hint: "Número decimal com ponto" },
-  ];
 
   async function handleDelete(id: string, nomeProd: string) {
     try {
@@ -78,13 +57,6 @@ export default function EletronicosCatalogo() {
             {state.catalogoEletronicos.length} produtos cadastrados
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <ImportCSV
-            title="Estoque de Eletrônicos"
-            columns={CSV_COLS_ELET}
-            onImport={handleImportCSV}
-            templateFileName="template_estoque_eletronicos.csv"
-          />
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setNome(""); setPrecoRef(""); setErrors({}); } }}>
             <DialogTrigger asChild>
               <Button><Plus className="h-4 w-4 mr-2" />Novo Produto</Button>
@@ -122,7 +94,6 @@ export default function EletronicosCatalogo() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
       </div>
 
       <div className="relative max-w-sm">

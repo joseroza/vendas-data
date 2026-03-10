@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Search, CheckCircle2, X } from "lucide-react";
-import { ImportCSV } from "@/components/ImportCSV";
 import { Link } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { toast } from "sonner";
@@ -13,7 +12,7 @@ import { toast } from "sonner";
 type StatusFiltro = "todos" | "pago" | "pendente";
 
 export default function PerfumesVendas() {
-  const { state, marcarVendaPaga, addVenda } = useApp();
+  const { state, marcarVendaPaga } = useApp();
 
   const [search,        setSearch]        = useState("");
   const [filtroStatus,  setFiltroStatus]  = useState<StatusFiltro>("todos");
@@ -71,57 +70,7 @@ export default function PerfumesVendas() {
   const totalLucro    = vendas.reduce((s, v) => v.tipo === "perfume" ? s + (v.valorFinal - v.precoBrl) : s, 0);
 
 
-  const CSV_COLS_VENDA_PERFUME = [
-    { key: "cliente",    label: "Nome do Cliente",    required: true,  example: "João Silva" },
-    { key: "telefone",   label: "Telefone",           required: false, example: "11999990000", hint: "Opcional" },
-    { key: "perfume",    label: "Perfume Vendido",    required: true,  example: "Sauvage Dior" },
-    { key: "preco_usd",  label: "Preço USD",          required: true,  example: "38.00" },
-    { key: "cotacao",    label: "Cotação R$",         required: true,  example: "5.80" },
-    { key: "margem",     label: "Margem %",           required: true,  example: "20",         hint: "Número sem o símbolo %" },
-    { key: "pagamento",  label: "Forma Pagamento",    required: true,  example: "pix",        hint: "pix | credito | entrada" },
-    { key: "parcelas",   label: "Nº Parcelas",        required: false, example: "3",          hint: "Preencher se for parcelado" },
-    { key: "data",       label: "Data",               required: true,  example: "15/03/2026", hint: "Formato dd/mm/aaaa" },
-    { key: "status",     label: "Status",             required: true,  example: "pago",       hint: "pago | pendente" },
-    { key: "observacoes",label: "Observações",        required: false, example: "Instagram" },
-  ];
 
-  async function handleImportVendas(rows: Record<string, string>[]) {
-    let ok = 0;
-    const errors: string[] = [];
-    for (const [i, row] of rows.entries()) {
-      const linha     = i + 2;
-      const cliente   = row["cliente"]?.trim();
-      const perfume   = row["perfume"]?.trim();
-      const precoUsd  = parseFloat(row["preco_usd"]);
-      const cotacao   = parseFloat(row["cotacao"]);
-      const margem    = parseFloat(row["margem"]);
-      const data      = row["data"]?.trim();
-      const status    = row["status"]?.trim() as "pago" | "pendente";
-      const pagamento = row["pagamento"]?.trim();
-      const parcelas  = parseInt(row["parcelas"]) || 0;
-      if (!cliente)                        { errors.push(`Linha ${linha}: cliente obrigatório.`); continue; }
-      if (!perfume)                        { errors.push(`Linha ${linha}: perfume obrigatório.`); continue; }
-      if (isNaN(precoUsd) || precoUsd <= 0){ errors.push(`Linha ${linha}: preco_usd inválido.`); continue; }
-      if (isNaN(cotacao)  || cotacao <= 0) { errors.push(`Linha ${linha}: cotacao inválida.`); continue; }
-      if (!data)                           { errors.push(`Linha ${linha}: data obrigatória.`); continue; }
-      if (!["pago","pendente"].includes(status)) { errors.push(`Linha ${linha}: status inválido (pago|pendente).`); continue; }
-      const precoBrl   = precoUsd * cotacao;
-      const valorFinal = precoBrl * (1 + (isNaN(margem) ? 20 : margem) / 100);
-      const parcelado  = pagamento !== "pix" && parcelas > 1;
-      try {
-        await addVenda({
-          tipo: "perfume", cliente, telefone: row["telefone"]?.trim() ?? "",
-          perfume, precoUsd, cotacao, precoBrl,
-          margemUsada: isNaN(margem) ? 20 : margem,
-          valorFinal, tipoPagamento: parcelado ? "parcelado" : "avista",
-          parcelas: [], observacoes: row["observacoes"]?.trim() ?? "",
-          data, status,
-        });
-        ok++;
-      } catch { errors.push(`Linha ${linha}: erro ao salvar venda de "${cliente}".`); }
-    }
-    return { ok, errors };
-  }
 
   async function handlePagar(id: string, cliente: string) {
     try {
@@ -142,17 +91,9 @@ export default function PerfumesVendas() {
           <h1 className="page-title">Vendas — Perfumes</h1>
           <p className="text-muted-foreground text-sm mt-1">{vendas.length} venda(s) encontrada(s)</p>
         </div>
-        <div className="flex items-center gap-2">
-          <ImportCSV
-            title="Vendas de Perfumes"
-            columns={CSV_COLS_VENDA_PERFUME}
-            onImport={handleImportVendas}
-            templateFileName="template_vendas_perfumes.csv"
-          />
           <Button asChild>
             <Link to="/perfumes/nova-venda"><Plus className="h-4 w-4 mr-2" />Nova Venda</Link>
           </Button>
-        </div>
       </div>
 
       {/* KPIs rápidos */}

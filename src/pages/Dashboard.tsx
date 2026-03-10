@@ -12,11 +12,20 @@ import { useApp, useCobrancas } from "@/context/AppContext";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
-const MESES: Record<string, number> = {
-  janeiro: 1, fevereiro: 2, marco: 3, abril: 4,
-  maio: 5, junho: 6, julho: 7, agosto: 8,
-  setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
-};
+const MESES = [
+  { value: "janeiro",   label: "Janeiro",   num: 1  },
+  { value: "fevereiro", label: "Fevereiro", num: 2  },
+  { value: "marco",     label: "Março",     num: 3  },
+  { value: "abril",     label: "Abril",     num: 4  },
+  { value: "maio",      label: "Maio",      num: 5  },
+  { value: "junho",     label: "Junho",     num: 6  },
+  { value: "julho",     label: "Julho",     num: 7  },
+  { value: "agosto",    label: "Agosto",    num: 8  },
+  { value: "setembro",  label: "Setembro",  num: 9  },
+  { value: "outubro",   label: "Outubro",   num: 10 },
+  { value: "novembro",  label: "Novembro",  num: 11 },
+  { value: "dezembro",  label: "Dezembro",  num: 12 },
+];
 
 function parseData(data: string): Date {
   const [d, m, y] = data.split("/");
@@ -32,7 +41,7 @@ export default function Dashboard() {
   const cobrancas = useCobrancas();
   const [mes, setMes] = useState("marco");
 
-  const mesNum = MESES[mes] ?? 3;
+  const mesNum = MESES.find((m) => m.value === mes)?.num ?? 3;
 
   const stats = useMemo(() => {
     const hoje = new Date();
@@ -86,9 +95,9 @@ export default function Dashboard() {
             <SelectValue placeholder="Filtrar mês" />
           </SelectTrigger>
           <SelectContent>
-            {Object.keys(MESES).map((m) => (
-              <SelectItem key={m} value={m}>
-                {m.charAt(0).toUpperCase() + m.slice(1)}
+            {MESES.map((m) => (
+              <SelectItem key={m.value} value={m.value}>
+                {m.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -98,7 +107,7 @@ export default function Dashboard() {
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard title="Venda Total" value={formatBRL(stats.totalGeral)} subtitle="Acumulado geral" icon={DollarSign} />
-        <KpiCard title="Venda Mensal" value={formatBRL(stats.totalMes)} subtitle={`${mes.charAt(0).toUpperCase() + mes.slice(1)} ${new Date().getFullYear()}`} icon={TrendingUp} />
+        <KpiCard title="Venda Mensal" value={formatBRL(stats.totalMes)} subtitle={`${MESES.find((m) => m.value === mes)?.label ?? mes} ${new Date().getFullYear()}`} icon={TrendingUp} />
         <KpiCard title="Venda Semanal" value={formatBRL(stats.totalSemana)} subtitle="Últimos 7 dias" icon={Calendar} />
         <KpiCard title="Venda Diária" value={formatBRL(stats.totalHoje)} subtitle="Hoje" icon={ArrowUpRight} />
       </div>

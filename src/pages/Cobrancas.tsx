@@ -30,7 +30,7 @@ export default function Cobrancas() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6">
       <div>
         <h1 className="page-title flex items-center gap-2">
           <AlertTriangle className="h-6 w-6 text-warning" />

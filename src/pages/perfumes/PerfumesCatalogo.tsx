@@ -12,6 +12,7 @@ import {
 import { Plus, Search, Trash2, Package, Loader2, Calculator } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { toast } from "sonner";
+import { ImportCSV } from "@/components/ImportCSV";
 
 interface FormState {
   marca: string;
@@ -130,7 +131,7 @@ function EstoqueForm({
   );
 }
 
-export default function PerfumesEstoque() {
+export default function PerfumesCatalogo() {
   const { state, addProdutoPerfume, deleteProdutoPerfumeAction } = useApp();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -193,7 +194,37 @@ export default function PerfumesEstoque() {
     }
   }
 
-  async function handleDelete(id: string, nome: string) {
+  async function handleImportCSV(rows: Record<string, string>[]) {
+    let ok = 0;
+    const errors: string[] = [];
+    for (const [i, row] of rows.entries()) {
+      const linha = i + 2;
+      const marca    = row["marca"]?.trim();
+      const nome     = row["nome"]?.trim();
+      const qtd      = parseInt(row["quantidade"]);
+      const precoUsd = parseFloat(row["preco_usd"]);
+      const cotacao  = parseFloat(row["cotacao"]);
+      if (!marca)                    { errors.push(`Linha ${linha}: marca obrigatória.`); continue; }
+      if (!nome)                     { errors.push(`Linha ${linha}: nome obrigatório.`); continue; }
+      if (isNaN(qtd) || qtd < 0)    { errors.push(`Linha ${linha}: quantidade inválida.`); continue; }
+      if (isNaN(precoUsd) || precoUsd <= 0) { errors.push(`Linha ${linha}: preco_usd inválido.`); continue; }
+      if (isNaN(cotacao) || cotacao <= 0)   { errors.push(`Linha ${linha}: cotacao inválida.`); continue; }
+      const precoBrl = precoUsd * cotacao * 1.2;
+      try {
+        await addProdutoPerfume({ marca, nome, quantidade: qtd, precoUsd, precoBrl });
+        ok++;
+      } catch { errors.push(`Linha ${linha}: erro ao salvar "${nome}".`); }
+    }
+    return { ok, errors };
+  }
+
+  const CSV_COLS_PERFUME = [
+    { key: "marca",      label: "Marca",         required: true,  example: "Dior",    hint: "Ex: Dior, Chanel, YSL" },
+    { key: "nome",       label: "Nome",           required: true,  example: "Sauvage" },
+    { key: "quantidade", label: "Quantidade",     required: true,  example: "5",       hint: "Número inteiro" },
+    { key: "preco_usd",  label: "Preço USD",      required: true,  example: "38.00",   hint: "Número decimal com ponto" },
+    { key: "cotacao",    label: "Cotação R$",     required: true,  example: "5.80",    hint: "Cotação do dólar no momento" },
+  ];
     try {
       await deleteProdutoPerfumeAction(id);
       toast.success(`"${nome}" removido do estoque.`);
@@ -222,29 +253,37 @@ export default function PerfumesEstoque() {
           </p>
         </div>
 
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(emptyForm); setErrors({}); } }}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Novo Perfume</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-display">Adicionar ao Estoque</DialogTitle>
-            </DialogHeader>
-            <EstoqueForm
-              form={form}
-              errors={errors}
-              onChange={onChange}
-              precoBrlCalculado={precoBrlCalculado}
-              precoVendaCalculado={precoVendaCalculado}
-            />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button onClick={handleAdd} disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Adicionar"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <ImportCSV
+            title="Estoque de Perfumes"
+            columns={CSV_COLS_PERFUME}
+            onImport={handleImportCSV}
+            templateFileName="template_estoque_perfumes.csv"
+          />
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(emptyForm); setErrors({}); } }}>
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-2" />Novo Perfume</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="font-display">Adicionar ao Estoque</DialogTitle>
+              </DialogHeader>
+              <EstoqueForm
+                form={form}
+                errors={errors}
+                onChange={onChange}
+                precoBrlCalculado={precoBrlCalculado}
+                precoVendaCalculado={precoVendaCalculado}
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+                <Button onClick={handleAdd} disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Adicionar"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Busca */}

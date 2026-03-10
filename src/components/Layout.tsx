@@ -1,31 +1,22 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
-import { ThemeToggle } from "@/context/ThemeContext.tsx";
+import { ThemeToggle } from "@/context/ThemeContext";
 
 export function Layout() {
   return (
-    <SidebarProvider>
-      <div
-        style={{ width: "100vw", minHeight: "100vh", display: "flex", overflow: "hidden" }}
-        className="bg-background"
-      >
+    <SidebarProvider style={{ "--sidebar-width": "220px" } as React.CSSProperties}>
+      <div className="flex bg-background w-full min-h-screen">
         <AppSidebar />
-
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          <header
-            style={{ position: "sticky", top: 0, zIndex: 10 }}
-            className="h-14 flex items-center justify-between border-b border-border px-5 bg-card/60 backdrop-blur-md"
-          >
+        <div className="flex flex-col flex-1 min-w-0 w-full">
+          <header className="shrink-0 h-14 flex items-center justify-between border-b border-border px-5 bg-card/60 backdrop-blur-md z-10">
             <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
             <ThemeToggle />
           </header>
-
-          <main
-            style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}
-            className="p-6 lg:p-8"
-          >
-            <Outlet />
+          <main className="flex-1 overflow-y-auto overflow-x-hidden">
+            <div className="p-6 lg:p-8 pb-16 w-full">
+              <Outlet />
+            </div>
           </main>
         </div>
       </div>

@@ -9,6 +9,14 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ─── Cliente Admin (usa service_role key — só para painel admin) ──────────────
+const SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_KEY as string;
+export const supabaseAdmin = SERVICE_KEY
+  ? createClient(SUPABASE_URL, SERVICE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
+
 // ─── Tipos do banco (snake_case → camelCase) ──────────────────────────────────
 
 export type DbCliente = {

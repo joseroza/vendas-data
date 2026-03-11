@@ -160,6 +160,20 @@ export async function updateParcelaStatus(
   if (error) throw error;
 }
 
+export async function deleteVenda(vendaId: string): Promise<void> {
+  await supabase.from("parcelas").delete().eq("venda_id", vendaId);
+  const { error } = await supabase.from("vendas").delete().eq("id", vendaId);
+  if (error) throw error;
+}
+
+export async function updateVenda(
+  vendaId: string,
+  fields: Partial<Omit<DbVenda, "id">>
+): Promise<void> {
+  const { error } = await supabase.from("vendas").update(fields).eq("id", vendaId);
+  if (error) throw error;
+}
+
 export async function updateVendaStatus(
   vendaId: string, status: "pago" | "pendente"
 ): Promise<void> {

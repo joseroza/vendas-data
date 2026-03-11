@@ -5,54 +5,64 @@ import { Upload, Download, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { toast } from "sonner";
 
 export interface CSVColumn {
-  key: string;
-  label: string;
+  key:      string;
+  label:    string;
   required: boolean;
-  example: string;
-  hint?: string;
+  example:  string;
+  hint?:    string;
 }
 
 interface ImportCSVProps {
-  title: string;
-  columns: CSVColumn[];
-  onImport: (rows: Record<string, string>[]) => Promise<{ ok: number; errors: string[] }>;
+  title:            string;
+  columns:          CSVColumn[];
+  onImport:         (rows: Record<string, string>[]) => Promise<{ ok: number; errors: string[] }>;
   templateFileName: string;
 }
 
 function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.trim().split(/\r?\n/);
+  const lines = text.trim().replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
-  return lines.slice(1).filter((l) => l.trim()).map((line) => {
-    // suporta valores com vírgula entre aspas
+
+  function parseLine(line: string): string[] {
     const values: string[] = [];
     let cur = "", inQ = false;
-    for (const ch of line) {
-      if (ch === '"') { inQ = !inQ; continue; }
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; continue; }
+        inQ = !inQ; continue;
+      }
       if (ch === "," && !inQ) { values.push(cur.trim()); cur = ""; continue; }
       cur += ch;
     }
     values.push(cur.trim());
+    return values;
+  }
+
+  const headers = parseLine(lines[0]).map((h) => h.replace(/^"|"$/g, "").trim());
+  return lines.slice(1).filter((l) => l.trim()).map((line) => {
+    const values = parseLine(line);
     const row: Record<string, string> = {};
-    headers.forEach((h, i) => { row[h] = values[i] ?? ""; });
+    headers.forEach((h, i) => { row[h] = (values[i] ?? "").replace(/^"|"$/g, ""); });
     return row;
   });
 }
 
+
 export function ImportCSV({ title, columns, onImport, templateFileName }: ImportCSVProps) {
-  const [open, setOpen]       = useState(false);
-  const [rows, setRows]       = useState<Record<string, string>[]>([]);
+  const [open,     setOpen]     = useState(false);
+  const [rows,     setRows]     = useState<Record<string, string>[]>([]);
   const [fileName, setFileName] = useState("");
-  const [result, setResult]   = useState<{ ok: number; errors: string[] } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [result,   setResult]   = useState<{ ok: number; errors: string[] } | null>(null);
+  const [loading,  setLoading]  = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function downloadTemplate() {
-    const header = columns.map((c) => c.key).join(",");
+    const header  = columns.map((c) => c.key).join(",");
     const example = columns.map((c) => `"${c.example}"`).join(",");
     const blob = new Blob([header + "\n" + example], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
     a.href = url; a.download = templateFileName;
     a.click(); URL.revokeObjectURL(url);
   }
@@ -64,7 +74,7 @@ export function ImportCSV({ title, columns, onImport, templateFileName }: Import
     setResult(null);
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target?.result as string;
+      const text   = ev.target?.result as string;
       const parsed = parseCSV(text);
       setRows(parsed);
     };
@@ -78,10 +88,13 @@ export function ImportCSV({ title, columns, onImport, templateFileName }: Import
     try {
       const res = await onImport(rows);
       setResult(res);
-      if (res.ok > 0) toast.success(`${res.ok} registro(s) importado(s) com sucesso!`);
+      if (res.ok > 0)       toast.success(`${res.ok} registro(s) importado(s) com sucesso!`);
       if (res.errors.length) toast.error(`${res.errors.length} erro(s) encontrado(s).`);
-    } catch { toast.error("Erro ao importar."); }
-    finally { setLoading(false); }
+    } catch {
+      toast.error("Erro ao importar.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleClose() {
@@ -123,7 +136,7 @@ export function ImportCSV({ title, columns, onImport, templateFileName }: Import
               </div>
             </div>
 
-            {/* Botão baixar template */}
+            {/* Baixar template */}
             <button onClick={downloadTemplate}
               className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 text-primary text-sm font-medium hover:bg-primary/10 transition-colors">
               <Download className="h-4 w-4 shrink-0" />
@@ -131,8 +144,7 @@ export function ImportCSV({ title, columns, onImport, templateFileName }: Import
             </button>
 
             {/* Upload */}
-            <div
-              onClick={() => fileRef.current?.click()}
+            <div onClick={() => fileRef.current?.click()}
               className="w-full flex flex-col items-center gap-2 p-6 rounded-xl border-2 border-dashed border-border hover:border-primary/50 bg-muted/20 hover:bg-muted/40 cursor-pointer transition-all">
               <Upload className="h-6 w-6 text-muted-foreground" />
               {fileName

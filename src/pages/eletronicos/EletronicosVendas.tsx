@@ -44,6 +44,7 @@ interface EditForm {
   numParcelas:   string;
   valorEntrada:  string;
   status:        "pago" | "pendente";
+  usarMargem:    boolean;
 }
 
 function toInputDate(dataBR: string): string {
@@ -96,9 +97,26 @@ export default function EletronicosVendas() {
   const temFiltro = search || filtroStatus !== "todos" || filtroData;
 
   const totalGeral    = vendas.reduce((s, v) => s + v.precoVenda, 0);
-  const totalPago     = vendas.filter((v) => v.status === "pago").reduce((s, v) => s + v.precoVenda, 0);
-  const totalPendente = vendas.filter((v) => v.status === "pendente").reduce((s, v) => s + v.precoVenda, 0);
   const totalLucro    = vendas.reduce((s, v) => s + v.lucro, 0);
+  const { totalPago, totalPendente } = useMemo(() => {
+    let recebido = 0; let pendente = 0;
+    for (const v of vendas) {
+      const valor      = v.precoVenda;
+      const entradaVal = (v as any).valorEntrada || 0;
+      if (v.tipoPagamento === "parcelado" && v.parcelas.length > 0) {
+        const parcelasNorm = v.parcelas.filter((p) => p.numero > 0);
+        const valorParc    = parcelasNorm.length > 0 ? (valor - entradaVal) / parcelasNorm.length : 0;
+        let rec = 0;
+        for (const p of v.parcelas) {
+          if (p.status === "pago") rec += ((p as any).valorPago > 0 ? (p as any).valorPago : (p.numero === 0 ? entradaVal : valorParc));
+        }
+        recebido += rec; pendente += Math.max(0, valor - rec);
+      } else {
+        if (v.status === "pago") recebido += valor; else pendente += valor;
+      }
+    }
+    return { totalPago: recebido, totalPendente: pendente };
+  }, [vendas]);
 
   async function handlePagar(id: string, cliente: string) {
     try {
@@ -126,6 +144,12 @@ export default function EletronicosVendas() {
     const totalVal = v.precoVenda ?? 0;
     const valorParc = (temEntrada && numParc + 1 > 0) ? totalVal / (numParc + 1) : 0;
     const entradaStr = temEntrada ? valorParc.toFixed(2) : "";
+    // Detecta se tinha margem: custo * (1+margem%) ≈ precoVenda salvo como precoCusto
+    const margem = state.margem;
+    const custoBase = v.precoCusto ?? 0;
+    const custoComMargem = custoBase * (1 + margem / 100);
+    // Se o custo salvo é próximo de custo*margem, tinha margem ativa
+    const tinhaMargemAtiva = false; // na edição, sempre começa desmarcado — usuário decide
     setForm({
       cliente:       v.cliente,
       telefone:      v.telefone ?? "",
@@ -140,6 +164,7 @@ export default function EletronicosVendas() {
       numParcelas:   String(numParc),
       valorEntrada:  entradaStr,
       status:        v.status as "pago" | "pendente",
+      usarMargem:    tinhaMargemAtiva,
     });
   }
 
@@ -165,8 +190,10 @@ export default function EletronicosVendas() {
   async function handleSalvar() {
     if (!editando || !form || !validate()) return;
     setSaving(true);
-    const custo = parseFloat(form.precoCusto) || 0;
-    const venda = parseFloat(form.precoVenda) || 0;
+    const custoBase = parseFloat(form.precoCusto) || 0;
+    const margem    = state.margem;
+    const custo     = form.usarMargem ? custoBase * (1 + margem / 100) : custoBase;
+    const venda     = parseFloat(form.precoVenda) || 0;
     try {
       const entradaVal = parseFloat(form.valorEntrada) || 0;
       const temEntradaEdit = entradaVal > 0 && form.tipoPagamento === "parcelado";
@@ -177,7 +204,7 @@ export default function EletronicosVendas() {
         const parcelaEntrada = temEntradaEdit ? [{
           numero: 0, total: num + 1,
           vencimento: `${d.padStart(2,"0")}/${m2.padStart(2,"0")}/${y}`,
-          status: "pago" as const,
+          status: "pago" as const, valorPago: entradaVal,
         }] : [];
         const restantes = Array.from({ length: num }, (_, i) => {
           const offset = temEntradaEdit ? 1 : 0;
@@ -185,7 +212,7 @@ export default function EletronicosVendas() {
           return {
             numero: i + 1, total: temEntradaEdit ? num + 1 : num,
             vencimento: `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`,
-            status: "pendente" as const,
+            status: "pendente" as const, valorPago: 0,
           };
         });
         novasParcelas = [...parcelaEntrada, ...restantes];
@@ -489,30 +516,13 @@ export default function EletronicosVendas() {
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Valores</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="flex flex-col gap-0.5">
-                      <span>Custo +{editando?.margemUsada ?? 20}% (R$)</span>
-                      <span className="text-xs font-normal text-muted-foreground">
-                        custo base = {parseFloat(form.precoCusto) > 0 ? fmtBRL(parseFloat(form.precoCusto)) : "—"}
-                      </span>
-                    </Label>
-                    <Input className="h-10" type="number" inputMode="decimal"
-                      value={
-                        parseFloat(form.precoCusto) > 0
-                          ? (parseFloat(form.precoCusto) * (1 + (editando?.margemUsada ?? 20) / 100)).toFixed(2)
-                          : form.precoCusto
-                      }
-                      onChange={(e) => {
-                        const comMargem = parseFloat(e.target.value);
-                        const semMargem = comMargem / (1 + (editando?.margemUsada ?? 20) / 100);
-                        setF("precoCusto", isNaN(semMargem) ? "" : String(semMargem.toFixed(4)));
-                      }}
-                    />
+                    <Label>Preço de Custo (R$)</Label>
+                    <Input className="h-10" type="number" inputMode="decimal" placeholder="0.00"
+                      value={form.precoCusto}
+                      onChange={(e) => setF("precoCusto", e.target.value)} />
                   </div>
                   <div>
-                    <Label className="flex flex-col gap-0.5">
-                      <span>Preço de Venda (R$) *</span>
-                      <span className="text-xs font-normal text-muted-foreground invisible">—</span>
-                    </Label>
+                    <Label>Preço de Venda (R$) *</Label>
                     <Input className={`h-10 ${formErrors.precoVenda ? "border-destructive" : ""}`}
                       type="number" inputMode="decimal"
                       value={form.precoVenda} onChange={(e) => setF("precoVenda", e.target.value)} />
@@ -520,15 +530,42 @@ export default function EletronicosVendas() {
                   </div>
                 </div>
 
-                {/* Lucro calculado */}
-                {parseFloat(form.precoVenda) > 0 && parseFloat(form.precoCusto) > 0 && (
-                  <div className="rounded-md bg-background border border-border/50 px-3 py-2 flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground">Lucro calculado</span>
-                    <span className={`text-sm font-bold ${parseFloat(form.precoVenda) - parseFloat(form.precoCusto) >= 0 ? "text-green-600" : "text-destructive"}`}>
-                      {fmtBRL(parseFloat(form.precoVenda) - parseFloat(form.precoCusto))}
-                    </span>
+                {/* Checkbox margem */}
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => f ? { ...f, usarMargem: !f.usarMargem } : f)}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg border text-sm transition-all
+                    ${form.usarMargem
+                      ? "border-primary/40 bg-primary/5 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/30"}`}
+                >
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all
+                    ${form.usarMargem ? "bg-primary border-primary" : "border-muted-foreground"}`}>
+                    {form.usarMargem && (
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
                   </div>
-                )}
+                  <span>Aplicar margem de +{state.margem}% sobre o custo</span>
+                </button>
+
+                {/* Lucro calculado */}
+                {parseFloat(form.precoVenda) > 0 && parseFloat(form.precoCusto) > 0 && (() => {
+                  const c = parseFloat(form.precoCusto);
+                  const custoFinal = form.usarMargem ? c * (1 + state.margem / 100) : c;
+                  const lucro = parseFloat(form.precoVenda) - custoFinal;
+                  return (
+                    <div className="rounded-md bg-background border border-border/50 px-3 py-2 flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">
+                        Lucro calculado {form.usarMargem ? `(custo +${state.margem}%: ${fmtBRL(custoFinal)})` : ""}
+                      </span>
+                      <span className={`text-sm font-bold ${lucro >= 0 ? "text-green-600" : "text-destructive"}`}>
+                        {fmtBRL(lucro)}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Data */}

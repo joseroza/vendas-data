@@ -94,9 +94,26 @@ export default function PerfumesVendas() {
 
   const temFiltro   = search || filtroStatus !== "todos" || filtroMarca !== "todos" || filtroData;
   const totalGeral   = vendas.reduce((s, v) => s + v.valorFinal, 0);
-  const totalPago    = vendas.filter((v) => v.status === "pago").reduce((s, v) => s + v.valorFinal, 0);
-  const totalPend    = vendas.filter((v) => v.status === "pendente").reduce((s, v) => s + v.valorFinal, 0);
   const totalLucro   = vendas.reduce((s, v) => s + (v.valorFinal - v.precoBrl), 0);
+  const { totalPago, totalPend } = useMemo(() => {
+    let recebido = 0; let pendente = 0;
+    for (const v of vendas) {
+      const valor      = v.valorFinal;
+      const entradaVal = (v as any).valorEntrada || 0;
+      if (v.tipoPagamento === "parcelado" && v.parcelas.length > 0) {
+        const parcelasNorm = v.parcelas.filter((p) => p.numero > 0);
+        const valorParc    = parcelasNorm.length > 0 ? (valor - entradaVal) / parcelasNorm.length : 0;
+        let rec = 0;
+        for (const p of v.parcelas) {
+          if (p.status === "pago") rec += ((p as any).valorPago > 0 ? (p as any).valorPago : (p.numero === 0 ? entradaVal : valorParc));
+        }
+        recebido += rec; pendente += Math.max(0, valor - rec);
+      } else {
+        if (v.status === "pago") recebido += valor; else pendente += valor;
+      }
+    }
+    return { totalPago: recebido, totalPend: pendente };
+  }, [vendas]);
 
   async function handlePagar(id: string, cliente: string) {
     try { await marcarVendaPaga(id); toast.success(`Venda de ${cliente} marcada como paga!`); }

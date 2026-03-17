@@ -18,7 +18,7 @@ export type StatusPagamento = "pago" | "pendente" | "atrasado";
 export type TipoPagamento   = "avista" | "parcelado";
 
 export interface Parcela {
-  numero: number; total: number; vencimento: string; status: StatusPagamento; valorPago: number;
+  numero: number; total: number; vencimento: string; status: StatusPagamento; valorPago?: number;
 }
 export interface VendaPerfume {
   id: string; tipo: "perfume"; cliente: string; telefone: string;
@@ -91,6 +91,7 @@ function dbToVenda(v: DbRow): Venda {
     cotacao: v.cotacao as number | undefined,
     margemUsada: (v.margem_usada ?? 20) as number,
     tipoPagamento: v.tipo_pagamento as TipoPagamento,
+    valorEntrada: (v.valor_entrada ?? 0) as number,
     parcelas, observacoes: (v.observacoes ?? "") as string,
     data: v.data as string, status: v.status as StatusPagamento,
   };

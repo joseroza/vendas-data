@@ -145,7 +145,9 @@ export function ParcelasModal({ venda: vendaInicial, onClose }: Props) {
 
         {/* Lista de parcelas */}
         <div className="space-y-2">
-          {venda.parcelas.map((parcela) => {
+          {venda.parcelas
+          .filter((p) => !(p.numero === 0 && valorEntrada === 0 && (p.valorPago === 0 || !p.valorPago)))
+          .map((parcela) => {
             const pago      = parcela.status === "pago";
             const eEntrada  = parcela.numero === 0;
             const atrasada  = !pago && !eEntrada && isAtrasada(parcela.vencimento);

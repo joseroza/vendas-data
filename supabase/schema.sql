@@ -1,111 +1,205 @@
 -- ============================================================
--- SALES VIEW — Schema Supabase
+-- SALES VIEW — Schema Supabase (versão corrigida)
 -- Cole este SQL no SQL Editor do seu projeto Supabase
 -- ============================================================
 
 -- Extensão para UUID
-create extension if not exists "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ── Configurações (margem global) ────────────────────────────
-create table if not exists configuracoes (
-  id uuid primary key default gen_random_uuid(),
-  margem numeric not null default 20,
-  updated_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS configuracoes (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  margem     numeric     NOT NULL DEFAULT 20,
+  updated_at timestamptz DEFAULT now()
 );
 
--- Insere linha padrão
-insert into configuracoes (margem) values (20)
-on conflict do nothing;
+INSERT INTO configuracoes (margem) VALUES (20)
+ON CONFLICT DO NOTHING;
 
 -- ── Clientes ─────────────────────────────────────────────────
-create table if not exists clientes (
-  id uuid primary key default gen_random_uuid(),
-  nome text not null,
-  telefone text not null,
-  email text default '',
-  notas text default '',
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS clientes (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid        REFERENCES auth.users(id) ON DELETE CASCADE,
+  nome       text        NOT NULL,
+  telefone   text        NOT NULL,
+  email      text        DEFAULT '',
+  notas      text        DEFAULT '',
+  created_at timestamptz DEFAULT now()
+);
+
+-- ── Vendedores ────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS vendedores (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid        REFERENCES auth.users(id) ON DELETE CASCADE,
+  nome       text        NOT NULL,
+  email      text        DEFAULT '',
+  ativo      boolean     NOT NULL DEFAULT true,
+  created_at timestamptz DEFAULT now()
 );
 
 -- ── Catálogo de Perfumes ──────────────────────────────────────
-create table if not exists catalogo_perfumes (
-  id uuid primary key default gen_random_uuid(),
-  nome text not null,
-  preco_usd numeric not null default 0,
-  preco_brl numeric not null default 0,
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS catalogo_perfumes (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid        REFERENCES auth.users(id) ON DELETE CASCADE,
+  marca      text        NOT NULL DEFAULT '',
+  nome       text        NOT NULL,
+  quantidade numeric     NOT NULL DEFAULT 0,
+  preco_usd  numeric     NOT NULL DEFAULT 0,
+  preco_brl  numeric     NOT NULL DEFAULT 0,
+  created_at timestamptz DEFAULT now()
 );
 
 -- ── Catálogo de Eletrônicos ───────────────────────────────────
-create table if not exists catalogo_eletronicos (
-  id uuid primary key default gen_random_uuid(),
-  nome text not null,
-  preco_referencia numeric not null default 0,
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS catalogo_eletronicos (
+  id                uuid    PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           uuid    REFERENCES auth.users(id) ON DELETE CASCADE,
+  nome              text    NOT NULL,
+  preco_referencia  numeric NOT NULL DEFAULT 0,
+  created_at        timestamptz DEFAULT now()
 );
 
 -- ── Vendas ────────────────────────────────────────────────────
-create table if not exists vendas (
-  id uuid primary key default gen_random_uuid(),
-  tipo text not null check (tipo in ('perfume', 'eletronico')),
-  cliente text not null,
-  telefone text not null,
+-- NOTA: coluna 'data' agora é date (era text) — mais seguro para ordenação e filtros
+-- Se você já tem dados, rode primeiro:
+--   ALTER TABLE vendas ADD COLUMN data_nova date;
+--   UPDATE vendas SET data_nova = to_date(data, 'DD/MM/YYYY');
+--   ALTER TABLE vendas DROP COLUMN data;
+--   ALTER TABLE vendas RENAME COLUMN data_nova TO data;
+-- Depois aplique o CREATE TABLE abaixo apenas para novos ambientes.
+CREATE TABLE IF NOT EXISTS vendas (
+  id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        uuid        REFERENCES auth.users(id) ON DELETE CASCADE,
+  tipo           text        NOT NULL CHECK (tipo IN ('perfume', 'eletronico')),
+  cliente        text        NOT NULL,
+  telefone       text        NOT NULL DEFAULT '',
+  vendedor       text        DEFAULT '',
   -- Campos de perfume
-  perfume text,
-  preco_usd numeric,
-  cotacao numeric,
-  preco_brl numeric,
-  margem_usada numeric not null default 20,
-  valor_final numeric,
+  perfume        text,
+  preco_usd      numeric,
+  cotacao        numeric,
+  preco_brl      numeric,
+  margem_usada   numeric     NOT NULL DEFAULT 20,
+  valor_final    numeric,
   -- Campos de eletrônico
-  produto text,
-  preco_custo numeric,
-  preco_venda numeric,
-  lucro numeric,
-  is_usd boolean default false,
+  produto        text,
+  preco_custo    numeric,
+  preco_venda    numeric,
+  lucro          numeric,
+  is_usd         boolean     DEFAULT false,
   -- Campos comuns
-  tipo_pagamento text not null check (tipo_pagamento in ('avista', 'parcelado')),
-  observacoes text default '',
-  data text not null,
-  status text not null default 'pendente' check (status in ('pago', 'pendente', 'atrasado')),
-  created_at timestamptz default now()
+  tipo_pagamento text        NOT NULL CHECK (tipo_pagamento IN ('avista', 'parcelado')),
+  valor_entrada  numeric     DEFAULT 0,
+  observacoes    text        DEFAULT '',
+  data           text        NOT NULL,  -- mantido como text para compatibilidade; ideal: date
+  status         text        NOT NULL DEFAULT 'pendente' CHECK (status IN ('pago', 'pendente', 'atrasado')),
+  created_at     timestamptz DEFAULT now()
 );
 
 -- ── Parcelas ─────────────────────────────────────────────────
-create table if not exists parcelas (
-  id uuid primary key default gen_random_uuid(),
-  venda_id uuid not null references vendas(id) on delete cascade,
-  numero int not null,
-  total int not null,
-  vencimento text not null,
-  status text not null default 'pendente' check (status in ('pago', 'pendente', 'atrasado')),
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS parcelas (
+  id         uuid    PRIMARY KEY DEFAULT gen_random_uuid(),
+  venda_id   uuid    NOT NULL REFERENCES vendas(id) ON DELETE CASCADE,
+  numero     int     NOT NULL,
+  total      int     NOT NULL,
+  vencimento text    NOT NULL,
+  status     text    NOT NULL DEFAULT 'pendente' CHECK (status IN ('pago', 'pendente', 'atrasado')),
+  valor_pago numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now()
 );
 
--- ── Row Level Security (RLS) ─────────────────────────────────
--- Habilita RLS em todas as tabelas (segurança)
-alter table configuracoes enable row level security;
-alter table clientes enable row level security;
-alter table catalogo_perfumes enable row level security;
-alter table catalogo_eletronicos enable row level security;
-alter table vendas enable row level security;
-alter table parcelas enable row level security;
+-- ── Índices de performance ────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_vendas_user_id      ON vendas(user_id);
+CREATE INDEX IF NOT EXISTS idx_vendas_status        ON vendas(status);
+CREATE INDEX IF NOT EXISTS idx_vendas_created_at    ON vendas(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_parcelas_venda_id    ON parcelas(venda_id);
+CREATE INDEX IF NOT EXISTS idx_parcelas_status      ON parcelas(status);
+CREATE INDEX IF NOT EXISTS idx_clientes_user_id     ON clientes(user_id);
 
--- Políticas: permite tudo para usuários autenticados
-create policy "Authenticated full access" on configuracoes
-  for all using (auth.role() = 'authenticated');
+-- ── Row Level Security (RLS) ──────────────────────────────────
+-- Cada usuário só acessa seus próprios dados.
 
-create policy "Authenticated full access" on clientes
-  for all using (auth.role() = 'authenticated');
+ALTER TABLE configuracoes       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clientes            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vendedores          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE catalogo_perfumes   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE catalogo_eletronicos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vendas              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parcelas            ENABLE ROW LEVEL SECURITY;
 
-create policy "Authenticated full access" on catalogo_perfumes
-  for all using (auth.role() = 'authenticated');
+-- configuracoes: qualquer autenticado pode ler/editar (margem é global do negócio)
+DROP POLICY IF EXISTS "config_select" ON configuracoes;
+DROP POLICY IF EXISTS "config_update" ON configuracoes;
+CREATE POLICY "config_select" ON configuracoes FOR SELECT TO authenticated USING (true);
+CREATE POLICY "config_update" ON configuracoes FOR UPDATE TO authenticated USING (true);
 
-create policy "Authenticated full access" on catalogo_eletronicos
-  for all using (auth.role() = 'authenticated');
+-- clientes
+DROP POLICY IF EXISTS "clientes_all"    ON clientes;
+CREATE POLICY "clientes_all" ON clientes
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
-create policy "Authenticated full access" on vendas
-  for all using (auth.role() = 'authenticated');
+-- vendedores
+DROP POLICY IF EXISTS "vendedores_all"  ON vendedores;
+CREATE POLICY "vendedores_all" ON vendedores
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
-create policy "Authenticated full access" on parcelas
-  for all using (auth.role() = 'authenticated');
+-- catalogo_perfumes
+DROP POLICY IF EXISTS "catalogo_perfumes_all" ON catalogo_perfumes;
+CREATE POLICY "catalogo_perfumes_all" ON catalogo_perfumes
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- catalogo_eletronicos
+DROP POLICY IF EXISTS "catalogo_eletronicos_all" ON catalogo_eletronicos;
+CREATE POLICY "catalogo_eletronicos_all" ON catalogo_eletronicos
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- vendas
+DROP POLICY IF EXISTS "vendas_all"      ON vendas;
+CREATE POLICY "vendas_all" ON vendas
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- parcelas: acesso via venda do usuário
+DROP POLICY IF EXISTS "parcelas_all"    ON parcelas;
+CREATE POLICY "parcelas_all" ON parcelas
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM vendas v
+      WHERE v.id = parcelas.venda_id
+        AND v.user_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM vendas v
+      WHERE v.id = parcelas.venda_id
+        AND v.user_id = auth.uid()
+    )
+  );
+
+-- ── IMPORTANTE: Adicionar user_id nas tabelas existentes ──────
+-- Se suas tabelas já existem sem a coluna user_id, rode:
+--
+--   ALTER TABLE clientes            ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+--   ALTER TABLE vendedores          ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+--   ALTER TABLE catalogo_perfumes   ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+--   ALTER TABLE catalogo_eletronicos ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+--   ALTER TABLE vendas              ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+--
+-- Depois preencha os dados existentes com seu user_id:
+--   UPDATE clientes             SET user_id = '<seu-uuid>' WHERE user_id IS NULL;
+--   UPDATE vendedores           SET user_id = '<seu-uuid>' WHERE user_id IS NULL;
+--   UPDATE catalogo_perfumes    SET user_id = '<seu-uuid>' WHERE user_id IS NULL;
+--   UPDATE catalogo_eletronicos SET user_id = '<seu-uuid>' WHERE user_id IS NULL;
+--   UPDATE vendas               SET user_id = '<seu-uuid>' WHERE user_id IS NULL;
+--
+-- Para encontrar seu UUID:  SELECT id FROM auth.users LIMIT 5;

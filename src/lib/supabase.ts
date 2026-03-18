@@ -74,12 +74,27 @@ export async function fetchMargem(): Promise<number> {
   return data.margem;
 }
 
+/**
+ * Salva a margem global.
+ * Usa upsert para garantir que sempre existe uma linha — sem depender de ID hardcoded.
+ */
 export async function saveMargem(margem: number): Promise<void> {
-  const { error } = await supabase
-    .from("configuracoes")
-    .update({ margem, updated_at: new Date().toISOString() })
-    .neq("id", "00000000-0000-0000-0000-000000000000");
-  if (error) throw error;
+  // Busca o ID da linha existente para fazer update seguro
+  const { data: existing } = await supabase
+    .from("configuracoes").select("id").limit(1).single();
+
+  if (existing?.id) {
+    const { error } = await supabase
+      .from("configuracoes")
+      .update({ margem, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    // Cria a linha se não existir (primeira execução)
+    const { error } = await supabase
+      .from("configuracoes").insert({ margem });
+    if (error) throw error;
+  }
 }
 
 // ─── Clientes ─────────────────────────────────────────────────────────────────
@@ -134,7 +149,9 @@ export async function deleteVendedor(id: string): Promise<void> {
 
 export async function fetchVendas(): Promise<(DbVenda & { parcelas: DbParcela[] })[]> {
   const { data, error } = await supabase
-    .from("vendas").select("*, parcelas(*)").order("created_at", { ascending: false });
+    .from("vendas")
+    .select("*, parcelas(*)")
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return data;
 }
@@ -182,6 +199,8 @@ export async function desfazerPagamentoParcela(
 }
 
 export async function deleteVenda(vendaId: string): Promise<void> {
+  // Parcelas são deletadas em cascata pelo banco (ON DELETE CASCADE)
+  // mas deletamos explicitamente para garantir em caso de RLS restritivo
   await supabase.from("parcelas").delete().eq("venda_id", vendaId);
   const { error } = await supabase.from("vendas").delete().eq("id", vendaId);
   if (error) throw error;
@@ -199,10 +218,8 @@ export async function recriarParcelas(
   vendaId: string,
   parcelas: Omit<DbParcela, "id" | "venda_id">[]
 ): Promise<void> {
-  // 1. Deleta todas as parcelas existentes da venda
   const { error: delError } = await supabase.from("parcelas").delete().eq("venda_id", vendaId);
   if (delError) throw delError;
-  // 2. Insere as novas (só se parcelado)
   if (parcelas.length > 0) {
     const { error: insError } = await supabase
       .from("parcelas").insert(parcelas.map((p) => ({ ...p, venda_id: vendaId })));

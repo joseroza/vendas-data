@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Save, TrendingUp, Plus, Trash2, Calculator, User, Megaphone, CreditCard, Calendar, DollarSign } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import { useVendedorLogado } from "@/hooks/useVendedorLogado";
 import { ClienteAutocomplete } from "@/components/ClienteAutocomplete";
 import { toast } from "sonner";
 
@@ -69,6 +70,7 @@ const PLATAFORMAS: { value: PlataformaVenda; label: string }[] = [
 
 export default function NovaEletronicoVenda() {
   const { state, addVenda, addCliente } = useApp();
+  const vendedorLogado = useVendedorLogado();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
@@ -192,7 +194,7 @@ export default function NovaEletronicoVenda() {
         tipo: "eletronico",
         cliente: cliente.trim(),
         telefone: telefone.trim(),
-        vendedor: "",
+        vendedor: vendedorLogado,
         produto: nomeProdutos,
         precoCusto: totalCusto,
         precoVenda: totalVenda,

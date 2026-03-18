@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Save, TrendingUp, Plus, Trash2, Calculator, DollarSign, User, Megaphone, CreditCard, Calendar } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import { useVendedorLogado } from "@/hooks/useVendedorLogado";
 import { ClienteAutocomplete } from "@/components/ClienteAutocomplete";
 import { toast } from "sonner";
 
@@ -63,6 +64,7 @@ const PLATAFORMAS: { value: PlataformaVenda; label: string }[] = [
 
 export default function NovaPerfumeVenda() {
   const { state, addVenda, addCliente } = useApp();
+  const vendedorLogado = useVendedorLogado();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
@@ -179,7 +181,7 @@ export default function NovaPerfumeVenda() {
         tipo: "perfume",
         cliente: cliente.trim(),
         telefone: telefone.trim(),
-        vendedor: "",
+        vendedor: vendedorLogado,
         perfume: nomePerfumes,
         precoUsd: totalUsd,
         cotacao: cotacaoNum,
